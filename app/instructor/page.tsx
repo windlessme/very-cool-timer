@@ -5,6 +5,14 @@ import { Clock } from 'lucide-react';
 
 type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
 
+interface Message {
+  id: number;
+  content: string;
+  isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
 interface Timer {
   id: number;
   title: string;
@@ -19,6 +27,7 @@ interface Timer {
 export default function InstructorTimerPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTimer, setActiveTimer] = useState<Timer | null>(null);
+  const [latestMessage, setLatestMessage] = useState<Message | null>(null);
 
   useEffect(() => {
     const clockInterval = setInterval(() => {
@@ -26,11 +35,14 @@ export default function InstructorTimerPage() {
     }, 1000);
 
     loadActiveTimer();
+    loadLatestMessage();
     const timerInterval = setInterval(loadActiveTimer, 2000);
+    const messageInterval = setInterval(loadLatestMessage, 5000);
 
     return () => {
       clearInterval(clockInterval);
       clearInterval(timerInterval);
+      clearInterval(messageInterval);
     };
   }, []);
 
@@ -42,6 +54,16 @@ export default function InstructorTimerPage() {
       setActiveTimer(active);
     } catch (error) {
       console.error('Error loading active timer:', error);
+    }
+  };
+
+  const loadLatestMessage = async () => {
+    try {
+      const response = await fetch('/api/messages');
+      const data: Message[] = await response.json();
+      setLatestMessage(data[0] || null);
+    } catch (error) {
+      console.error('Error loading latest message:', error);
     }
   };
 
@@ -94,11 +116,17 @@ export default function InstructorTimerPage() {
 
   if (!activeTimer) {
     return (
-      <main className="min-h-screen bg-gray-950 text-white flex items-center justify-center p-8">
+      <main className="min-h-screen bg-gray-950 text-white flex flex-col justify-center p-8">
         <section className="text-center">
           <p className="text-3xl font-semibold text-gray-300 mb-6">目前沒有進行中的課程</p>
           <h1 className="text-7xl font-bold text-white">尚未開始</h1>
         </section>
+        {latestMessage && (
+          <section className="mt-12 rounded-lg border border-gray-700 bg-gray-900 px-8 py-5">
+            <p className="text-xl font-semibold text-gray-400 mb-2">最新訊息</p>
+            <p className="text-3xl font-bold text-white whitespace-pre-wrap">{latestMessage.content}</p>
+          </section>
+        )}
       </main>
     );
   }
@@ -137,6 +165,17 @@ export default function InstructorTimerPage() {
           {isEnded ? '00:00:00' : remainingDisplay}
         </div>
       </section>
+
+      {latestMessage && (
+        <section className={`rounded-lg border px-8 py-5 ${isTenMinuteWarning ? 'border-amber-300 bg-white/80' : 'border-gray-700 bg-gray-900'}`}>
+          <p className={`${isTenMinuteWarning ? 'text-amber-800' : 'text-gray-400'} text-xl font-semibold mb-2`}>
+            最新訊息
+          </p>
+          <p className={`text-3xl font-bold whitespace-pre-wrap ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'}`}>
+            {latestMessage.content}
+          </p>
+        </section>
+      )}
     </main>
   );
 }
