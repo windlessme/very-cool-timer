@@ -19,16 +19,27 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, startTime, endTime, isActive } = await request.json();
+    const { title, startTime, endTime, isActive, status = 'active' } = await request.json();
     
-    const timer = await prisma.timer.create({
-      data: {
-        title,
-        startTime,
-        endTime,
-        isActive,
-      },
-    });
+    const [, timer] = await prisma.$transaction([
+      prisma.timer.updateMany({
+        where: {
+          isActive: true,
+        },
+        data: {
+          isActive: false,
+        },
+      }),
+      prisma.timer.create({
+        data: {
+          title,
+          startTime,
+          endTime,
+          isActive,
+          status,
+        },
+      }),
+    ]);
     
     return NextResponse.json(timer);
   } catch (error) {
@@ -39,8 +50,36 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, title, startTime, endTime, isActive } = await request.json();
-    
+    const { id, title, startTime, endTime, isActive, status = isActive ? 'active' : 'paused' } = await request.json();
+
+    if (isActive) {
+      const [, timer] = await prisma.$transaction([
+        prisma.timer.updateMany({
+          where: {
+            id: {
+              not: id,
+            },
+            isActive: true,
+          },
+          data: {
+            isActive: false,
+          },
+        }),
+        prisma.timer.update({
+          where: { id },
+          data: {
+            title,
+            startTime,
+            endTime,
+            isActive,
+            status,
+          },
+        }),
+      ]);
+
+      return NextResponse.json(timer);
+    }
+
     const timer = await prisma.timer.update({
       where: { id },
       data: {
@@ -48,6 +87,7 @@ export async function PUT(request: NextRequest) {
         startTime,
         endTime,
         isActive,
+        status,
       },
     });
     

@@ -1,13 +1,26 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Clock, MessageCircle, Send, Trash2 } from 'lucide-react';
+import { Play, Pause, RotateCcw, Clock, MessageCircle, Send, Trash2, Plus } from 'lucide-react';
 
 
 interface Message {
   id: number;
   content: string;
   isVisible: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+
+interface Timer {
+  id: number;
+  title: string;
+  startTime: string;
+  endTime: string;
+  isActive: boolean;
+  status: TimerStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -21,13 +34,22 @@ export default function AdminPanel() {
   const [isConfigured, setIsConfigured] = useState(false);
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
+  const [activeTimer, setActiveTimer] = useState<Timer | null>(null);
+  const [extendMinutes, setExtendMinutes] = useState('10');
+
+  const inputClassName = "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white text-gray-900 placeholder:text-gray-500";
 
   useEffect(() => {
     const timer = setInterval(() => {
       setCurrentTime(new Date());
     }, 1000);
     loadMessages();
-    return () => clearInterval(timer);
+    loadActiveTimer();
+    const activeTimerInterval = setInterval(loadActiveTimer, 5000);
+    return () => {
+      clearInterval(timer);
+      clearInterval(activeTimerInterval);
+    };
   }, []);
 
   const loadMessages = async () => {
@@ -40,6 +62,24 @@ export default function AdminPanel() {
     }
   };
 
+  const loadActiveTimer = async () => {
+    try {
+      const response = await fetch('/api/timers');
+      const data: Timer[] = await response.json();
+      const active = data.find((timer) => timer.isActive) || null;
+      setActiveTimer(active);
+      setIsConfigured(Boolean(active));
+      setIsRunning(Boolean(active));
+
+      if (active) {
+        setTitle(active.title);
+        setStartTime(active.startTime);
+        setEndTime(active.endTime);
+      }
+    } catch (error) {
+      console.error('Error loading active timer:', error);
+    }
+  };
 
   const handleStart = async () => {
     if (!startTime || !endTime) {
@@ -71,10 +111,13 @@ export default function AdminPanel() {
           startTime,
           endTime,
           isActive: true,
+          status: 'active',
         }),
       });
       
       if (response.ok) {
+        const timer = await response.json();
+        setActiveTimer(timer);
         setIsConfigured(true);
         setIsRunning(true);
       }
@@ -83,16 +126,143 @@ export default function AdminPanel() {
     }
   };
 
-  const handlePause = () => {
-    setIsRunning(false);
+  const deactivateActiveTimer = async () => {
+    if (!activeTimer) return false;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: activeTimer.id,
+          title: activeTimer.title,
+          startTime: activeTimer.startTime,
+          endTime: activeTimer.endTime,
+          isActive: false,
+          status: 'paused',
+        }),
+      });
+
+      return response.ok;
+    } catch (error) {
+      console.error('Error deactivating timer:', error);
+      return false;
+    }
   };
 
-  const handleReset = () => {
+  const handlePause = async () => {
+    const didPause = await deactivateActiveTimer();
+    if (!didPause) return;
+
+    setActiveTimer(null);
+    setIsRunning(false);
+    setIsConfigured(false);
+  };
+
+  const handleReset = async () => {
+    if (activeTimer) {
+      const didReset = await deactivateActiveTimer();
+      if (!didReset) return;
+    }
+
+    setActiveTimer(null);
     setIsRunning(false);
     setIsConfigured(false);
     setStartTime('');
     setEndTime('');
     setTitle('');
+  };
+
+  const getDateFromTime = (time: string) => {
+    const [hours, minutes] = time.split(':').map(Number);
+    const date = new Date();
+    date.setHours(hours, minutes, 0, 0);
+    return date;
+  };
+
+  const formatTimeInputValue = (date: Date) => {
+    const hours = date.getHours().toString().padStart(2, '0');
+    const minutes = date.getMinutes().toString().padStart(2, '0');
+    return `${hours}:${minutes}`;
+  };
+
+  const handleExtendTimer = async (minutes: number) => {
+    if (!activeTimer) return;
+    if (!Number.isFinite(minutes) || minutes <= 0) {
+      alert('請輸入大於 0 的延長分鐘數');
+      return;
+    }
+
+    const now = new Date();
+    const currentEnd = getDateFromTime(activeTimer.endTime);
+    const base = currentEnd > now ? currentEnd : now;
+    const nextEnd = new Date(base.getTime() + minutes * 60 * 1000);
+
+    if (nextEnd.getDate() !== base.getDate()) {
+      alert('目前版本不支援跨日課程，請設定今天 23:59 以前的結束時間');
+      return;
+    }
+
+    const nextEndTime = formatTimeInputValue(nextEnd);
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: activeTimer.id,
+          title: activeTimer.title,
+          startTime: activeTimer.startTime,
+          endTime: nextEndTime,
+          isActive: activeTimer.isActive,
+          status: 'extended',
+        }),
+      });
+
+      if (response.ok) {
+        const updatedTimer = await response.json();
+        setActiveTimer(updatedTimer);
+        setEndTime(updatedTimer.endTime);
+        setIsConfigured(true);
+        setIsRunning(updatedTimer.isActive);
+      }
+    } catch (error) {
+      console.error('Error extending timer:', error);
+    }
+  };
+
+  const handleSetTimerStatus = async (status: TimerStatus) => {
+    if (!activeTimer) return;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: activeTimer.id,
+          title: activeTimer.title,
+          startTime: activeTimer.startTime,
+          endTime: activeTimer.endTime,
+          isActive: true,
+          status,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedTimer = await response.json();
+        setActiveTimer(updatedTimer);
+        setIsConfigured(true);
+        setIsRunning(true);
+      }
+    } catch (error) {
+      console.error('Error updating timer status:', error);
+    }
   };
 
   const handleSendMessage = async () => {
@@ -137,10 +307,11 @@ export default function AdminPanel() {
   };
 
   const getTimeRemaining = () => {
-    if (!startTime || !endTime) return { hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
+    const timerEndTime = activeTimer?.endTime || endTime;
+    if (!timerEndTime) return { hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
     
     const now = new Date();
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const [endHours, endMinutes] = timerEndTime.split(':').map(Number);
     const endDate = new Date();
     endDate.setHours(endHours, endMinutes, 0, 0);
     
@@ -154,8 +325,21 @@ export default function AdminPanel() {
   };
 
   const timeRemaining = getTimeRemaining();
-  const isClassActive = isRunning && timeRemaining.totalSeconds > 0;
+  const activeStatus = activeTimer?.status || 'active';
+  const isClassActive = isRunning && timeRemaining.totalSeconds > 0 && activeStatus === 'active';
   const isClassEnded = isConfigured && timeRemaining.totalSeconds === 0;
+  const statusLabel = isClassEnded
+    ? '已完成'
+    : activeStatus === 'break'
+      ? '休息中'
+      : activeStatus === 'extended'
+        ? '延長中'
+        : isClassActive
+          ? '進行中'
+          : '未開始';
+  const displayTitle = activeTimer?.title || title || '未命名課程';
+  const displayStartTime = activeTimer?.startTime || startTime;
+  const displayEndTime = activeTimer?.endTime || endTime;
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -164,6 +348,13 @@ export default function AdminPanel() {
           <div className="text-center mb-6">
             <h1 className="text-4xl font-bold text-gray-900 mb-2">管理員面板</h1>
             <p className="text-gray-500">管理計時器和訊息</p>
+            <a
+              href="/instructor"
+              className="inline-flex items-center gap-2 mt-4 rounded-lg border border-gray-300 bg-white px-4 py-2 font-semibold text-gray-900 hover:bg-gray-100 transition-colors"
+            >
+              <Clock size={18} />
+              講師頁
+            </a>
           </div>
 
           {/* Timer Section */}
@@ -179,7 +370,7 @@ export default function AdminPanel() {
                     value={title}
                     onChange={(e) => setTitle(e.target.value)}
                     placeholder="例如：數學課、團隊會議"
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white"
+                    className={inputClassName}
                   />
                 </div>
                 <div className="space-y-2">
@@ -188,7 +379,7 @@ export default function AdminPanel() {
                     type="time"
                     value={startTime}
                     onChange={(e) => setStartTime(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white"
+                    className={inputClassName}
                   />
                 </div>
                 <div className="space-y-2">
@@ -197,7 +388,7 @@ export default function AdminPanel() {
                     type="time"
                     value={endTime}
                     onChange={(e) => setEndTime(e.target.value)}
-                    className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white"
+                    className={inputClassName}
                   />
                 </div>
               </div>
@@ -231,31 +422,110 @@ export default function AdminPanel() {
             </div>
 
             {isConfigured && (
-              <div className="grid md:grid-cols-3 gap-6 mb-6">
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-                  <div className="flex items-center justify-center gap-2 mb-2">
-                    <Clock size={24} className="text-gray-600" />
-                    <h3 className="text-lg font-medium text-gray-900">目前時間</h3>
+              <div className="space-y-6 mb-6">
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-6">
+                  <p className="text-sm font-medium text-blue-700 mb-2">目前課程</p>
+                  <div className="flex flex-col md:flex-row md:items-end md:justify-between gap-3">
+                    <div>
+                      <h3 className="text-3xl font-bold text-gray-950">{displayTitle}</h3>
+                      <p className="text-gray-700 mt-2">
+                        課程時間從 <span className="font-semibold text-gray-950">{displayStartTime}</span> 到 <span className="font-semibold text-gray-950">{displayEndTime}</span>
+                      </p>
+                    </div>
+                    <span className="inline-flex w-fit items-center rounded-full bg-white px-4 py-2 text-sm font-semibold text-gray-900 border border-blue-200">
+                      {statusLabel}
+                    </span>
                   </div>
-                  <p className="text-3xl font-semibold text-gray-900">{formatTime(currentTime)}</p>
+
+                  <div className="mt-6 border-t border-blue-200 pt-5">
+                    <p className="text-sm font-semibold text-gray-900 mb-3">課程狀態</p>
+                    <div className="flex flex-wrap gap-2 mb-5">
+                      <button
+                        onClick={() => handleSetTimerStatus('active')}
+                        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold transition-colors ${
+                          activeStatus === 'active'
+                            ? 'bg-gray-900 text-white'
+                            : 'border border-gray-300 bg-white text-gray-900 hover:bg-gray-100'
+                        }`}
+                      >
+                        <Play size={16} />
+                        進行中
+                      </button>
+                      <button
+                        onClick={() => handleSetTimerStatus('break')}
+                        className={`inline-flex items-center gap-2 rounded-lg px-4 py-2 font-semibold transition-colors ${
+                          activeStatus === 'break'
+                            ? 'bg-amber-600 text-white'
+                            : 'border border-amber-300 bg-white text-amber-800 hover:bg-amber-50'
+                        }`}
+                      >
+                        <Pause size={16} />
+                        休息中
+                      </button>
+                    </div>
+
+                    <p className="text-sm font-semibold text-gray-900 mb-3">延長時間</p>
+                    <div className="flex flex-col lg:flex-row gap-3">
+                      <div className="flex flex-wrap gap-2">
+                        {[5, 10, 15].map((minutes) => (
+                          <button
+                            key={minutes}
+                            onClick={() => handleExtendTimer(minutes)}
+                            className="inline-flex items-center gap-2 rounded-lg border border-blue-300 bg-white px-4 py-2 font-semibold text-blue-800 hover:bg-blue-100 transition-colors"
+                          >
+                            <Plus size={16} />
+                            {minutes} 分鐘
+                          </button>
+                        ))}
+                      </div>
+                      <div className="flex gap-2 lg:ml-auto">
+                        <input
+                          type="number"
+                          min="1"
+                          step="1"
+                          value={extendMinutes}
+                          onChange={(e) => setExtendMinutes(e.target.value)}
+                          className="w-28 px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent bg-white text-gray-900 placeholder:text-gray-500"
+                          aria-label="自訂延長分鐘數"
+                        />
+                        <button
+                          onClick={() => handleExtendTimer(Number(extendMinutes))}
+                          className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-4 py-2 font-semibold text-white hover:bg-blue-700 transition-colors"
+                        >
+                          <Plus size={16} />
+                          延長
+                        </button>
+                      </div>
+                    </div>
+                  </div>
                 </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">剩餘時間</h3>
-                  <div className="text-3xl font-semibold text-gray-900">
-                    {isClassEnded ? (
-                      '課程結束'
-                    ) : (
-                      `${timeRemaining.hours.toString().padStart(2, '0')}:${timeRemaining.minutes.toString().padStart(2, '0')}:${timeRemaining.seconds.toString().padStart(2, '0')}`
-                    )}
+                <div className="grid md:grid-cols-3 gap-6">
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                    <div className="flex items-center justify-center gap-2 mb-2">
+                      <Clock size={24} className="text-gray-600" />
+                      <h3 className="text-lg font-medium text-gray-900">目前時間</h3>
+                    </div>
+                    <p className="text-3xl font-semibold text-gray-950">{formatTime(currentTime)}</p>
                   </div>
-                </div>
 
-                <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-                  <h3 className="text-lg font-medium text-gray-900 mb-2">狀態</h3>
-                  <p className="text-2xl font-semibold text-gray-900">
-                    {isClassActive ? '進行中' : isClassEnded ? '已完成' : '未開始'}
-                  </p>
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">剩餘時間</h3>
+                    <div className="text-3xl font-semibold text-gray-950">
+                      {isClassEnded ? (
+                        '課程結束'
+                      ) : (
+                        `${timeRemaining.hours.toString().padStart(2, '0')}:${timeRemaining.minutes.toString().padStart(2, '0')}:${timeRemaining.seconds.toString().padStart(2, '0')}`
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">狀態</h3>
+                    <p className="text-2xl font-semibold text-gray-950">
+                      {statusLabel}
+                    </p>
+                  </div>
                 </div>
               </div>
             )}
@@ -272,8 +542,8 @@ export default function AdminPanel() {
                   value={message}
                   onChange={(e) => setMessage(e.target.value)}
                   placeholder="輸入要發送的訊息..."
-                  className="w-full px-4 py-3 border border-gray-200 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white"
-                  onKeyPress={(e) => e.key === 'Enter' && handleSendMessage()}
+                  className={inputClassName}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSendMessage()}
                 />
               </div>
               <button

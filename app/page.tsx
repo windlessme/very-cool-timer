@@ -11,12 +11,15 @@ interface Message {
   updatedAt: string;
 }
 
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+
 interface Timer {
   id: number;
   title: string;
   startTime: string;
   endTime: string;
   isActive: boolean;
+  status: TimerStatus;
   createdAt: string;
   updatedAt: string;
 }
@@ -120,8 +123,18 @@ export default function ClassTimerDashboard() {
 
   const timeRemaining = getTimeRemaining();
   const progress = getProgress();
+  const activeStatus = activeTimer?.status || 'active';
   const isClassActive = activeTimer?.isActive && timeRemaining.totalSeconds > 0;
   const isClassEnded = activeTimer && timeRemaining.totalSeconds === 0;
+  const statusLabel = isClassEnded
+    ? '已完成'
+    : activeStatus === 'break'
+      ? '休息中'
+      : activeStatus === 'extended'
+        ? '延長中'
+        : isClassActive
+          ? '進行中'
+          : '未開始';
 
   return (
     <div className="min-h-screen bg-gray-50 p-4">
@@ -191,7 +204,7 @@ export default function ClassTimerDashboard() {
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
                   <h3 className="text-2xl font-medium text-gray-900 mb-4">狀態</h3>
                   <p className="text-4xl font-semibold text-gray-900">
-                    {isClassActive ? '進行中' : isClassEnded ? '已完成' : '未開始'}
+                    {statusLabel}
                   </p>
                 </div>
               </div>
