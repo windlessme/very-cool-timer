@@ -13,9 +13,9 @@ export async function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const { title, startTime, endTime, isActive, status = 'active' } = await request.json();
+    const { title, startTime, endTime, isActive, status = 'active', mode = 'down' } = await request.json();
     
-    const timer = await createTimer({ title, startTime, endTime, isActive, status });
+    const timer = await createTimer({ title, startTime, endTime, isActive, status, mode });
     
     return NextResponse.json(timer);
   } catch (error) {
@@ -26,9 +26,9 @@ export async function POST(request: NextRequest) {
 
 export async function PUT(request: NextRequest) {
   try {
-    const { id, title, startTime, endTime, isActive, status = isActive ? 'active' : 'paused' } = await request.json();
+    const { id, title, startTime, endTime, isActive, status = isActive ? 'active' : 'paused', mode = 'down' } = await request.json();
 
-    const timer = await updateTimer({ id, title, startTime, endTime, isActive, status });
+    const timer = await updateTimer({ id, title, startTime, endTime, isActive, status, mode });
     
     return NextResponse.json(timer);
   } catch (error) {

@@ -1,0 +1,1 @@
+ALTER TABLE "Timer" ADD COLUMN "mode" TEXT NOT NULL DEFAULT 'down';

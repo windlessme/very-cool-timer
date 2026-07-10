@@ -12,6 +12,7 @@ interface Message {
 }
 
 type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
+type TimerMode = 'down' | 'up';
 
 interface Timer {
   id: number;
@@ -20,6 +21,7 @@ interface Timer {
   endTime: string;
   isActive: boolean;
   status: TimerStatus;
+  mode: TimerMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -103,6 +105,27 @@ export default function ClassTimerDashboard() {
     return { hours, minutes, seconds, totalSeconds };
   };
 
+  const getTimeElapsed = () => {
+    if (!activeTimer) return { hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
+
+    const now = new Date();
+    const [startHours, startMinutes] = activeTimer.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = activeTimer.endTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(startHours, startMinutes, 0, 0);
+    const endDate = new Date();
+    endDate.setHours(endHours, endMinutes, 0, 0);
+
+    const totalDurationSeconds = Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / 1000));
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / 1000));
+    const totalSeconds = Math.min(totalDurationSeconds, elapsedSeconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return { hours, minutes, seconds, totalSeconds };
+  };
+
   const getProgress = () => {
     if (!activeTimer) return 0;
     
@@ -122,6 +145,9 @@ export default function ClassTimerDashboard() {
   };
 
   const timeRemaining = getTimeRemaining();
+  const timeElapsed = getTimeElapsed();
+  const displayTime = activeTimer?.mode === 'up' ? timeElapsed : timeRemaining;
+  const timerModeLabel = activeTimer?.mode === 'up' ? '已過時間' : '剩餘時間';
   const progress = getProgress();
   const activeStatus = activeTimer?.status || 'active';
   const isClassActive = activeTimer?.isActive && timeRemaining.totalSeconds > 0;
@@ -173,26 +199,26 @@ export default function ClassTimerDashboard() {
                   <p className="text-6xl font-semibold text-gray-900">{formatTime(currentTime)}</p>
                 </div>
 
-                {/* Time Remaining */}
+                {/* Timer Display */}
                 <div className="bg-gray-50 border border-gray-200 rounded-lg p-8 text-center">
-                  <h3 className="text-2xl font-medium text-gray-900 mb-4">剩餘時間</h3>
+                  <h3 className="text-2xl font-medium text-gray-900 mb-4">{timerModeLabel}</h3>
                   <div className="text-6xl font-semibold text-gray-900">
-                    {isClassEnded ? (
+                    {isClassEnded && activeTimer.mode !== 'up' ? (
                       '課程結束'
                     ) : (
                       <div className="flex justify-center items-baseline gap-2">
                         <div className="flex flex-col items-center">
-                          <span>{timeRemaining.hours.toString().padStart(2, '0')}</span>
+                          <span>{displayTime.hours.toString().padStart(2, '0')}</span>
                           <span className="text-lg text-gray-600">時</span>
                         </div>
                         <span className="text-4xl">:</span>
                         <div className="flex flex-col items-center">
-                          <span>{timeRemaining.minutes.toString().padStart(2, '0')}</span>
+                          <span>{displayTime.minutes.toString().padStart(2, '0')}</span>
                           <span className="text-lg text-gray-600">分</span>
                         </div>
                         <span className="text-4xl">:</span>
                         <div className="flex flex-col items-center">
-                          <span>{timeRemaining.seconds.toString().padStart(2, '0')}</span>
+                          <span>{displayTime.seconds.toString().padStart(2, '0')}</span>
                           <span className="text-lg text-gray-600">秒</span>
                         </div>
                       </div>

@@ -17,6 +17,7 @@ model Timer {
   endTime   String
   isActive  Boolean  @default(false)
   status    String   @default("active")
+  mode      String   @default("down")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 }

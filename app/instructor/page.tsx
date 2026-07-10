@@ -4,6 +4,7 @@ import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 
 type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
+type TimerMode = 'down' | 'up';
 
 interface Message {
   id: number;
@@ -20,6 +21,7 @@ interface Timer {
   endTime: string;
   isActive: boolean;
   status: TimerStatus;
+  mode: TimerMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -95,7 +97,31 @@ export default function InstructorTimerPage() {
     return { hours, minutes, seconds, totalSeconds };
   };
 
+  const getTimeElapsed = () => {
+    if (!activeTimer) return { hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
+
+    const now = new Date();
+    const [startHours, startMinutes] = activeTimer.startTime.split(':').map(Number);
+    const [endHours, endMinutes] = activeTimer.endTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(startHours, startMinutes, 0, 0);
+    const endDate = new Date();
+    endDate.setHours(endHours, endMinutes, 0, 0);
+
+    const totalDurationSeconds = Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / 1000));
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / 1000));
+    const totalSeconds = Math.min(totalDurationSeconds, elapsedSeconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return { hours, minutes, seconds, totalSeconds };
+  };
+
   const timeRemaining = getTimeRemaining();
+  const timeElapsed = getTimeElapsed();
+  const displayTime = activeTimer?.mode === 'up' ? timeElapsed : timeRemaining;
+  const timerModeLabel = activeTimer?.mode === 'up' ? '已過時間' : '剩餘時間';
   const isEnded = Boolean(activeTimer) && timeRemaining.totalSeconds === 0;
   const isTenMinuteWarning = timeRemaining.totalSeconds > 0 && timeRemaining.totalSeconds <= 600;
   const activeStatus = activeTimer?.status || 'active';
@@ -115,7 +141,7 @@ export default function InstructorTimerPage() {
       : activeStatus === 'extended'
         ? 'bg-blue-100 text-blue-900 border-blue-300'
         : 'bg-emerald-100 text-emerald-900 border-emerald-300';
-  const remainingDisplay = `${timeRemaining.hours.toString().padStart(2, '0')}:${timeRemaining.minutes.toString().padStart(2, '0')}:${timeRemaining.seconds.toString().padStart(2, '0')}`;
+  const timerDisplay = `${displayTime.hours.toString().padStart(2, '0')}:${displayTime.minutes.toString().padStart(2, '0')}:${displayTime.seconds.toString().padStart(2, '0')}`;
 
   if (!activeTimer) {
     return (
@@ -165,15 +191,15 @@ export default function InstructorTimerPage() {
       <section className="flex-1 flex flex-col items-center justify-center text-center">
         {isTenMinuteWarning && (
           <div className="mb-8 rounded-lg border-2 border-amber-500 bg-amber-300 px-10 py-5 text-4xl font-bold text-gray-950 shadow-lg">
-            倒數 10 分鐘
+            距離結束 10 分鐘
           </div>
         )}
 
         <p className={`${isTenMinuteWarning ? 'text-amber-800' : 'text-gray-400'} text-3xl font-semibold mb-6`}>
-          剩餘時間
+          {timerModeLabel}
         </p>
         <div className={`font-bold tabular-nums leading-none ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'} text-8xl md:text-9xl lg:text-[10rem]`}>
-          {isEnded ? '00:00:00' : remainingDisplay}
+          {isEnded && activeTimer.mode !== 'up' ? '00:00:00' : timerDisplay}
         </div>
       </section>
 

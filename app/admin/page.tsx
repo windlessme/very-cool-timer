@@ -1,7 +1,7 @@
 "use client"
 
 import React, { useState, useEffect } from 'react';
-import { Play, Pause, RotateCcw, Clock, MessageCircle, Send, Trash2, Plus } from 'lucide-react';
+import { ArrowDown, ArrowUp, Play, Pause, RotateCcw, Clock, MessageCircle, Send, Trash2, Plus } from 'lucide-react';
 
 
 interface Message {
@@ -13,6 +13,7 @@ interface Message {
 }
 
 type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
+type TimerMode = 'down' | 'up';
 
 interface Timer {
   id: number;
@@ -21,6 +22,7 @@ interface Timer {
   endTime: string;
   isActive: boolean;
   status: TimerStatus;
+  mode: TimerMode;
   createdAt: string;
   updatedAt: string;
 }
@@ -37,9 +39,11 @@ export default function AdminPanel() {
   const [activeTimer, setActiveTimer] = useState<Timer | null>(null);
   const [scheduledTimer, setScheduledTimer] = useState<Timer | null>(null);
   const [extendMinutes, setExtendMinutes] = useState('10');
+  const [timerMode, setTimerMode] = useState<TimerMode>('down');
   const [nextTitle, setNextTitle] = useState('');
   const [nextStartTime, setNextStartTime] = useState('');
   const [nextEndTime, setNextEndTime] = useState('');
+  const [nextTimerMode, setNextTimerMode] = useState<TimerMode>('down');
 
   const inputClassName = "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white text-gray-900 placeholder:text-gray-500";
 
@@ -81,6 +85,7 @@ export default function AdminPanel() {
         setTitle(active.title);
         setStartTime(active.startTime);
         setEndTime(active.endTime);
+        setTimerMode(active.mode || 'down');
       }
     } catch (error) {
       console.error('Error loading active timer:', error);
@@ -124,6 +129,7 @@ export default function AdminPanel() {
           endTime,
           isActive: true,
           status: 'active',
+          mode: timerMode,
         }),
       });
       
@@ -153,6 +159,7 @@ export default function AdminPanel() {
           endTime: nextEndTime,
           isActive: false,
           status: 'scheduled',
+          mode: nextTimerMode,
         }),
       });
       
@@ -162,6 +169,7 @@ export default function AdminPanel() {
         setNextTitle('');
         setNextStartTime('');
         setNextEndTime('');
+        setNextTimerMode('down');
       }
     } catch (error) {
       console.error('Error scheduling next timer:', error);
@@ -184,6 +192,7 @@ export default function AdminPanel() {
           endTime: scheduledTimer.endTime,
           isActive: true,
           status: 'active',
+          mode: scheduledTimer.mode || 'down',
         }),
       });
       
@@ -196,6 +205,7 @@ export default function AdminPanel() {
         setTitle(timer.title);
         setStartTime(timer.startTime);
         setEndTime(timer.endTime);
+        setTimerMode(timer.mode || 'down');
       }
     } catch (error) {
       console.error('Error starting scheduled timer:', error);
@@ -240,6 +250,7 @@ export default function AdminPanel() {
           endTime: activeTimer.endTime,
           isActive: false,
           status: 'paused',
+          mode: activeTimer.mode || 'down',
         }),
       });
 
@@ -318,6 +329,7 @@ export default function AdminPanel() {
           endTime: nextEndTime,
           isActive: activeTimer.isActive,
           status: 'extended',
+          mode: activeTimer.mode || 'down',
         }),
       });
 
@@ -349,6 +361,7 @@ export default function AdminPanel() {
           endTime: activeTimer.endTime,
           isActive: true,
           status,
+          mode: activeTimer.mode || 'down',
         }),
       });
 
@@ -360,6 +373,37 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error('Error updating timer status:', error);
+    }
+  };
+
+  const handleSetTimerMode = async (mode: TimerMode) => {
+    setTimerMode(mode);
+    if (!activeTimer) return;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: activeTimer.id,
+          title: activeTimer.title,
+          startTime: activeTimer.startTime,
+          endTime: activeTimer.endTime,
+          isActive: activeTimer.isActive,
+          status: activeTimer.status,
+          mode,
+        }),
+      });
+
+      if (response.ok) {
+        const updatedTimer = await response.json();
+        setActiveTimer(updatedTimer);
+        setTimerMode(updatedTimer.mode || 'down');
+      }
+    } catch (error) {
+      console.error('Error updating timer mode:', error);
     }
   };
 
@@ -422,8 +466,35 @@ export default function AdminPanel() {
     return { hours, minutes, seconds, totalSeconds };
   };
 
+  const getTimeElapsed = () => {
+    const timerStartTime = activeTimer?.startTime || startTime;
+    const timerEndTime = activeTimer?.endTime || endTime;
+    if (!timerStartTime || !timerEndTime) return { hours: 0, minutes: 0, seconds: 0, totalSeconds: 0 };
+
+    const now = new Date();
+    const [startHours, startMinutes] = timerStartTime.split(':').map(Number);
+    const [endHours, endMinutes] = timerEndTime.split(':').map(Number);
+    const startDate = new Date();
+    startDate.setHours(startHours, startMinutes, 0, 0);
+    const endDate = new Date();
+    endDate.setHours(endHours, endMinutes, 0, 0);
+
+    const totalDurationSeconds = Math.max(0, Math.floor((endDate.getTime() - startDate.getTime()) / 1000));
+    const elapsedSeconds = Math.max(0, Math.floor((now.getTime() - startDate.getTime()) / 1000));
+    const totalSeconds = Math.min(totalDurationSeconds, elapsedSeconds);
+    const hours = Math.floor(totalSeconds / 3600);
+    const minutes = Math.floor((totalSeconds % 3600) / 60);
+    const seconds = totalSeconds % 60;
+
+    return { hours, minutes, seconds, totalSeconds };
+  };
+
   const timeRemaining = getTimeRemaining();
+  const timeElapsed = getTimeElapsed();
   const activeStatus = activeTimer?.status || 'active';
+  const activeTimerMode = activeTimer?.mode || timerMode;
+  const displayTime = activeTimerMode === 'up' ? timeElapsed : timeRemaining;
+  const timerModeLabel = activeTimerMode === 'up' ? '已過時間' : '剩餘時間';
   const isClassActive = isRunning && timeRemaining.totalSeconds > 0 && activeStatus === 'active';
   const isClassEnded = isConfigured && timeRemaining.totalSeconds === 0;
   const statusLabel = isClassEnded
@@ -462,34 +533,66 @@ export default function AdminPanel() {
             <h2 className="text-2xl font-semibold text-gray-900 mb-4">計時器設定</h2>
             
             {!isRunning && (
-              <div className="grid md:grid-cols-3 gap-6 mb-6">
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">課程標題</label>
-                  <input
-                    type="text"
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    placeholder="例如：數學課、團隊會議"
-                    className={inputClassName}
-                  />
+              <div className="mb-6">
+                <div className="grid md:grid-cols-3 gap-6 mb-5">
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">課程標題</label>
+                    <input
+                      type="text"
+                      value={title}
+                      onChange={(e) => setTitle(e.target.value)}
+                      placeholder="例如：數學課、團隊會議"
+                      className={inputClassName}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">開始時間</label>
+                    <input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      className={inputClassName}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="block text-sm font-medium text-gray-700">結束時間</label>
+                    <input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      className={inputClassName}
+                    />
+                  </div>
                 </div>
+
                 <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">開始時間</label>
-                  <input
-                    type="time"
-                    value={startTime}
-                    onChange={(e) => setStartTime(e.target.value)}
-                    className={inputClassName}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <label className="block text-sm font-medium text-gray-700">結束時間</label>
-                  <input
-                    type="time"
-                    value={endTime}
-                    onChange={(e) => setEndTime(e.target.value)}
-                    className={inputClassName}
-                  />
+                  <p className="text-sm font-medium text-gray-700">計時方式</p>
+                  <div className="inline-flex rounded-lg border border-gray-300 bg-white p-1">
+                    <button
+                      type="button"
+                      onClick={() => setTimerMode('down')}
+                      className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                        timerMode === 'down'
+                          ? 'bg-gray-900 text-white'
+                          : 'text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      <ArrowDown size={16} />
+                      倒數
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setTimerMode('up')}
+                      className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                        timerMode === 'up'
+                          ? 'bg-gray-900 text-white'
+                          : 'text-gray-800 hover:bg-gray-100'
+                      }`}
+                    >
+                      <ArrowUp size={16} />
+                      往上數
+                    </button>
+                  </div>
                 </div>
               </div>
             )}
@@ -564,6 +667,34 @@ export default function AdminPanel() {
                       </button>
                     </div>
 
+                    <p className="text-sm font-semibold text-gray-900 mb-3">計時方式</p>
+                    <div className="inline-flex rounded-lg border border-gray-300 bg-white p-1 mb-5">
+                      <button
+                        type="button"
+                        onClick={() => handleSetTimerMode('down')}
+                        className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                          activeTimerMode === 'down'
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-800 hover:bg-gray-100'
+                        }`}
+                      >
+                        <ArrowDown size={16} />
+                        倒數
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => handleSetTimerMode('up')}
+                        className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                          activeTimerMode === 'up'
+                            ? 'bg-gray-900 text-white'
+                            : 'text-gray-800 hover:bg-gray-100'
+                        }`}
+                      >
+                        <ArrowUp size={16} />
+                        往上數
+                      </button>
+                    </div>
+
                     <p className="text-sm font-semibold text-gray-900 mb-3">延長時間</p>
                     <div className="flex flex-col lg:flex-row gap-3">
                       <div className="flex flex-wrap gap-2">
@@ -610,12 +741,12 @@ export default function AdminPanel() {
                   </div>
 
                   <div className="bg-gray-50 border border-gray-200 rounded-lg p-6 text-center">
-                    <h3 className="text-lg font-medium text-gray-900 mb-2">剩餘時間</h3>
+                    <h3 className="text-lg font-medium text-gray-900 mb-2">{timerModeLabel}</h3>
                     <div className="text-3xl font-semibold text-gray-950">
-                      {isClassEnded ? (
+                      {isClassEnded && activeTimerMode !== 'up' ? (
                         '課程結束'
                       ) : (
-                        `${timeRemaining.hours.toString().padStart(2, '0')}:${timeRemaining.minutes.toString().padStart(2, '0')}:${timeRemaining.seconds.toString().padStart(2, '0')}`
+                        `${displayTime.hours.toString().padStart(2, '0')}:${displayTime.minutes.toString().padStart(2, '0')}:${displayTime.seconds.toString().padStart(2, '0')}`
                       )}
                     </div>
                   </div>
@@ -642,6 +773,9 @@ export default function AdminPanel() {
                     <p className="text-lg font-bold text-gray-950">{scheduledTimer.title || '未命名課程'}</p>
                     <p className="text-gray-700">
                       {scheduledTimer.startTime} - {scheduledTimer.endTime}
+                    </p>
+                    <p className="text-gray-700">
+                      {scheduledTimer.mode === 'up' ? '往上數' : '倒數'}
                     </p>
                   </div>
                 )}
@@ -675,6 +809,36 @@ export default function AdminPanel() {
                     onChange={(e) => setNextEndTime(e.target.value)}
                     className={inputClassName}
                   />
+                </div>
+              </div>
+
+              <div className="space-y-2 mb-5">
+                <p className="text-sm font-medium text-gray-700">下一堂計時方式</p>
+                <div className="inline-flex rounded-lg border border-emerald-300 bg-white p-1">
+                  <button
+                    type="button"
+                    onClick={() => setNextTimerMode('down')}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                      nextTimerMode === 'down'
+                        ? 'bg-emerald-700 text-white'
+                        : 'text-gray-800 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <ArrowDown size={16} />
+                    倒數
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setNextTimerMode('up')}
+                    className={`inline-flex items-center gap-2 rounded-md px-4 py-2 font-semibold transition-colors ${
+                      nextTimerMode === 'up'
+                        ? 'bg-emerald-700 text-white'
+                        : 'text-gray-800 hover:bg-emerald-50'
+                    }`}
+                  >
+                    <ArrowUp size={16} />
+                    往上數
+                  </button>
                 </div>
               </div>
 

@@ -1,6 +1,7 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 
 type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
+type TimerMode = 'down' | 'up';
 
 interface TimerInput {
   id?: number;
@@ -9,6 +10,7 @@ interface TimerInput {
   endTime: string;
   isActive: boolean;
   status?: TimerStatus;
+  mode?: TimerMode;
 }
 
 interface MessageInput {
@@ -35,6 +37,7 @@ type TimerRow = {
   endTime: string;
   isActive: boolean | number;
   status?: TimerStatus;
+  mode?: TimerMode;
   createdAt: string;
   updatedAt: string;
 };
@@ -66,6 +69,7 @@ function normalizeTimer(timer: TimerRow) {
     ...timer,
     isActive: Boolean(timer.isActive),
     status: timer.status || 'active',
+    mode: timer.mode || 'down',
   };
 }
 
@@ -83,6 +87,7 @@ const timerSelect = `
   endTime,
   isActive,
   status,
+  mode,
   strftime('%Y-%m-%dT%H:%M:%fZ', createdAt) as createdAt,
   strftime('%Y-%m-%dT%H:%M:%fZ', updatedAt) as updatedAt
 `;
@@ -116,12 +121,13 @@ export async function listTimers() {
 export async function createTimer(input: TimerInput) {
   const db = getD1Database();
   const status = input.status || 'active';
+  const mode = input.mode || 'down';
 
   if (db) {
     const statements = [
       db
-        .prepare('INSERT INTO Timer (title, startTime, endTime, isActive, status) VALUES (?, ?, ?, ?, ?)')
-        .bind(input.title, input.startTime, input.endTime, input.isActive ? 1 : 0, status),
+        .prepare('INSERT INTO Timer (title, startTime, endTime, isActive, status, mode) VALUES (?, ?, ?, ?, ?, ?)')
+        .bind(input.title, input.startTime, input.endTime, input.isActive ? 1 : 0, status, mode),
     ];
 
     if (input.isActive) {
@@ -162,6 +168,7 @@ export async function createTimer(input: TimerInput) {
         endTime: input.endTime,
         isActive: input.isActive,
         status,
+        mode,
       },
     });
   }
@@ -182,6 +189,7 @@ export async function createTimer(input: TimerInput) {
         endTime: input.endTime,
         isActive: input.isActive,
         status,
+        mode,
       },
     }),
   ]);
@@ -192,6 +200,7 @@ export async function createTimer(input: TimerInput) {
 export async function updateTimer(input: Required<TimerInput>) {
   const db = getD1Database();
   const status = input.status || (input.isActive ? 'active' : 'paused');
+  const mode = input.mode || 'down';
 
   if (db) {
     const statements = [];
@@ -207,9 +216,9 @@ export async function updateTimer(input: Required<TimerInput>) {
     statements.push(
       db
         .prepare(
-          'UPDATE Timer SET title = ?, startTime = ?, endTime = ?, isActive = ?, status = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
+          'UPDATE Timer SET title = ?, startTime = ?, endTime = ?, isActive = ?, status = ?, mode = ?, updatedAt = CURRENT_TIMESTAMP WHERE id = ?',
         )
-        .bind(input.title, input.startTime, input.endTime, input.isActive ? 1 : 0, status, input.id),
+        .bind(input.title, input.startTime, input.endTime, input.isActive ? 1 : 0, status, mode, input.id),
     );
 
     await db.batch(statements);
@@ -246,6 +255,7 @@ export async function updateTimer(input: Required<TimerInput>) {
           endTime: input.endTime,
           isActive: input.isActive,
           status,
+          mode,
         },
       }),
     ]);
@@ -261,6 +271,7 @@ export async function updateTimer(input: Required<TimerInput>) {
       endTime: input.endTime,
       isActive: input.isActive,
       status,
+      mode,
     },
   });
 }
