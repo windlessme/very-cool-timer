@@ -3,7 +3,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 
-type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
 
 interface Message {
   id: number;
@@ -27,6 +27,7 @@ interface Timer {
 export default function InstructorTimerPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
   const [activeTimer, setActiveTimer] = useState<Timer | null>(null);
+  const [scheduledTimer, setScheduledTimer] = useState<Timer | null>(null);
   const [latestMessage, setLatestMessage] = useState<Message | null>(null);
 
   useEffect(() => {
@@ -51,7 +52,9 @@ export default function InstructorTimerPage() {
       const response = await fetch('/api/timers');
       const data: Timer[] = await response.json();
       const active = data.find((timer) => timer.isActive) || null;
+      const scheduled = data.find((timer) => !timer.isActive && timer.status === 'scheduled') || null;
       setActiveTimer(active);
+      setScheduledTimer(scheduled);
     } catch (error) {
       console.error('Error loading active timer:', error);
     }
@@ -126,6 +129,15 @@ export default function InstructorTimerPage() {
             <p className="text-5xl font-bold text-white whitespace-pre-wrap leading-tight">{latestMessage.content}</p>
           </section>
         )}
+        {scheduledTimer && (
+          <section className="mt-6 rounded-lg border border-emerald-700 bg-emerald-950 px-10 py-6">
+            <p className="text-2xl font-semibold text-emerald-300 mb-2">下一堂</p>
+            <p className="text-4xl font-bold text-white">{scheduledTimer.title || '未命名課程'}</p>
+            <p className="text-3xl font-semibold text-emerald-100 mt-2">
+              {scheduledTimer.startTime} - {scheduledTimer.endTime}
+            </p>
+          </section>
+        )}
       </main>
     );
   }
@@ -169,6 +181,17 @@ export default function InstructorTimerPage() {
         <section className={`rounded-lg border px-10 py-7 ${isTenMinuteWarning ? 'border-amber-300 bg-white/80' : 'border-gray-700 bg-gray-900'}`}>
           <p className={`text-5xl font-bold whitespace-pre-wrap leading-tight ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'}`}>
             {latestMessage.content}
+          </p>
+        </section>
+      )}
+
+      {scheduledTimer && (
+        <section className={`mt-4 rounded-lg border px-8 py-4 ${isTenMinuteWarning ? 'border-emerald-300 bg-emerald-50' : 'border-emerald-800 bg-emerald-950'}`}>
+          <p className={`${isTenMinuteWarning ? 'text-emerald-800' : 'text-emerald-300'} text-xl font-semibold mb-1`}>
+            下一堂
+          </p>
+          <p className={`text-3xl font-bold ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'}`}>
+            {scheduledTimer.title || '未命名課程'} <span className="font-semibold">{scheduledTimer.startTime} - {scheduledTimer.endTime}</span>
           </p>
         </section>
       )}

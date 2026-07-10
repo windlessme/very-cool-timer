@@ -1,6 +1,6 @@
 import { getCloudflareContext } from '@opennextjs/cloudflare';
 
-type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
 
 interface TimerInput {
   id?: number;
@@ -118,12 +118,23 @@ export async function createTimer(input: TimerInput) {
   const status = input.status || 'active';
 
   if (db) {
-    await db.batch([
-      db.prepare('UPDATE Timer SET isActive = 0, updatedAt = CURRENT_TIMESTAMP WHERE isActive = 1'),
+    const statements = [
       db
         .prepare('INSERT INTO Timer (title, startTime, endTime, isActive, status) VALUES (?, ?, ?, ?, ?)')
         .bind(input.title, input.startTime, input.endTime, input.isActive ? 1 : 0, status),
-    ]);
+    ];
+
+    if (input.isActive) {
+      statements.unshift(
+        db.prepare('UPDATE Timer SET isActive = 0, updatedAt = CURRENT_TIMESTAMP WHERE isActive = 1'),
+      );
+    } else if (status === 'scheduled') {
+      statements.unshift(
+        db.prepare("DELETE FROM Timer WHERE isActive = 0 AND status = 'scheduled'"),
+      );
+    }
+
+    await db.batch(statements);
 
     const timer = await db
       .prepare(`SELECT ${timerSelect} FROM Timer WHERE id = last_insert_rowid()`)
@@ -134,6 +145,27 @@ export async function createTimer(input: TimerInput) {
   }
 
   const prisma = await getPrisma();
+  if (!input.isActive) {
+    if (status === 'scheduled') {
+      await prisma.timer.deleteMany({
+        where: {
+          isActive: false,
+          status: 'scheduled',
+        },
+      });
+    }
+
+    return prisma.timer.create({
+      data: {
+        title: input.title,
+        startTime: input.startTime,
+        endTime: input.endTime,
+        isActive: input.isActive,
+        status,
+      },
+    });
+  }
+
   const [, timer] = await prisma.$transaction([
     prisma.timer.updateMany({
       where: {

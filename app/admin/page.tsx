@@ -12,7 +12,7 @@ interface Message {
   updatedAt: string;
 }
 
-type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
 
 interface Timer {
   id: number;
@@ -35,7 +35,11 @@ export default function AdminPanel() {
   const [message, setMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [activeTimer, setActiveTimer] = useState<Timer | null>(null);
+  const [scheduledTimer, setScheduledTimer] = useState<Timer | null>(null);
   const [extendMinutes, setExtendMinutes] = useState('10');
+  const [nextTitle, setNextTitle] = useState('');
+  const [nextStartTime, setNextStartTime] = useState('');
+  const [nextEndTime, setNextEndTime] = useState('');
 
   const inputClassName = "w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent text-lg bg-white text-gray-900 placeholder:text-gray-500";
 
@@ -67,7 +71,9 @@ export default function AdminPanel() {
       const response = await fetch('/api/timers');
       const data: Timer[] = await response.json();
       const active = data.find((timer) => timer.isActive) || null;
+      const scheduled = data.find((timer) => !timer.isActive && timer.status === 'scheduled') || null;
       setActiveTimer(active);
+      setScheduledTimer(scheduled);
       setIsConfigured(Boolean(active));
       setIsRunning(Boolean(active));
 
@@ -81,15 +87,15 @@ export default function AdminPanel() {
     }
   };
 
-  const handleStart = async () => {
-    if (!startTime || !endTime) {
+  const isValidTimeRange = (rangeStartTime: string, rangeEndTime: string) => {
+    if (!rangeStartTime || !rangeEndTime) {
       alert('請設定開始和結束時間');
-      return;
+      return false;
     }
-    
+
     const start = new Date();
-    const [startHours, startMinutes] = startTime.split(':').map(Number);
-    const [endHours, endMinutes] = endTime.split(':').map(Number);
+    const [startHours, startMinutes] = rangeStartTime.split(':').map(Number);
+    const [endHours, endMinutes] = rangeEndTime.split(':').map(Number);
     
     start.setHours(startHours, startMinutes, 0, 0);
     const end = new Date(start);
@@ -97,8 +103,14 @@ export default function AdminPanel() {
     
     if (end <= start) {
       alert('結束時間必須在開始時間之後');
-      return;
+      return false;
     }
+
+    return true;
+  };
+
+  const handleStart = async () => {
+    if (!isValidTimeRange(startTime, endTime)) return;
     
     try {
       const response = await fetch('/api/timers', {
@@ -123,6 +135,92 @@ export default function AdminPanel() {
       }
     } catch (error) {
       console.error('Error creating timer:', error);
+    }
+  };
+
+  const handleScheduleNext = async () => {
+    if (!isValidTimeRange(nextStartTime, nextEndTime)) return;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          title: nextTitle,
+          startTime: nextStartTime,
+          endTime: nextEndTime,
+          isActive: false,
+          status: 'scheduled',
+        }),
+      });
+      
+      if (response.ok) {
+        const timer = await response.json();
+        setScheduledTimer(timer);
+        setNextTitle('');
+        setNextStartTime('');
+        setNextEndTime('');
+      }
+    } catch (error) {
+      console.error('Error scheduling next timer:', error);
+    }
+  };
+
+  const handleStartScheduledTimer = async () => {
+    if (!scheduledTimer) return;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: scheduledTimer.id,
+          title: scheduledTimer.title,
+          startTime: scheduledTimer.startTime,
+          endTime: scheduledTimer.endTime,
+          isActive: true,
+          status: 'active',
+        }),
+      });
+      
+      if (response.ok) {
+        const timer = await response.json();
+        setActiveTimer(timer);
+        setScheduledTimer(null);
+        setIsConfigured(true);
+        setIsRunning(true);
+        setTitle(timer.title);
+        setStartTime(timer.startTime);
+        setEndTime(timer.endTime);
+      }
+    } catch (error) {
+      console.error('Error starting scheduled timer:', error);
+    }
+  };
+
+  const handleClearScheduledTimer = async () => {
+    if (!scheduledTimer) return;
+
+    try {
+      const response = await fetch('/api/timers', {
+        method: 'DELETE',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          id: scheduledTimer.id,
+        }),
+      });
+      
+      if (response.ok) {
+        setScheduledTimer(null);
+      }
+    } catch (error) {
+      console.error('Error clearing scheduled timer:', error);
     }
   };
 
@@ -334,9 +432,11 @@ export default function AdminPanel() {
       ? '休息中'
       : activeStatus === 'extended'
         ? '延長中'
-        : isClassActive
-          ? '進行中'
-          : '未開始';
+        : activeStatus === 'scheduled'
+          ? '預排中'
+          : isClassActive
+            ? '進行中'
+            : '未開始';
   const displayTitle = activeTimer?.title || title || '未命名課程';
   const displayStartTime = activeTimer?.startTime || startTime;
   const displayEndTime = activeTimer?.endTime || endTime;
@@ -529,6 +629,83 @@ export default function AdminPanel() {
                 </div>
               </div>
             )}
+
+            <div className="bg-emerald-50 border border-emerald-200 rounded-lg p-6 mb-8">
+              <div className="flex flex-col lg:flex-row lg:items-start lg:justify-between gap-4 mb-5">
+                <div>
+                  <h3 className="text-xl font-semibold text-gray-950">預排下一堂</h3>
+                  <p className="text-gray-700 mt-1">提前填好下一堂課，不會影響目前正在跑的倒數。</p>
+                </div>
+                {scheduledTimer && (
+                  <div className="rounded-lg border border-emerald-300 bg-white px-4 py-3">
+                    <p className="text-sm font-semibold text-emerald-700 mb-1">下一堂</p>
+                    <p className="text-lg font-bold text-gray-950">{scheduledTimer.title || '未命名課程'}</p>
+                    <p className="text-gray-700">
+                      {scheduledTimer.startTime} - {scheduledTimer.endTime}
+                    </p>
+                  </div>
+                )}
+              </div>
+
+              <div className="grid md:grid-cols-3 gap-6 mb-5">
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">下一堂標題</label>
+                  <input
+                    type="text"
+                    value={nextTitle}
+                    onChange={(e) => setNextTitle(e.target.value)}
+                    placeholder="例如：第二堂、Q&A"
+                    className={inputClassName}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">下一堂開始</label>
+                  <input
+                    type="time"
+                    value={nextStartTime}
+                    onChange={(e) => setNextStartTime(e.target.value)}
+                    className={inputClassName}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="block text-sm font-medium text-gray-700">下一堂結束</label>
+                  <input
+                    type="time"
+                    value={nextEndTime}
+                    onChange={(e) => setNextEndTime(e.target.value)}
+                    className={inputClassName}
+                  />
+                </div>
+              </div>
+
+              <div className="flex flex-wrap gap-3">
+                <button
+                  onClick={handleScheduleNext}
+                  className="inline-flex items-center gap-2 rounded-lg bg-emerald-600 px-5 py-3 font-semibold text-white hover:bg-emerald-700 transition-colors"
+                >
+                  <Plus size={18} />
+                  預排下一堂
+                </button>
+                {scheduledTimer && (
+                  <>
+                    <button
+                      onClick={handleStartScheduledTimer}
+                      className="inline-flex items-center gap-2 rounded-lg bg-blue-600 px-5 py-3 font-semibold text-white hover:bg-blue-700 transition-colors"
+                    >
+                      <Play size={18} />
+                      開始下一堂
+                    </button>
+                    <button
+                      onClick={handleClearScheduledTimer}
+                      className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-5 py-3 font-semibold text-gray-900 hover:bg-gray-100 transition-colors"
+                    >
+                      <Trash2 size={18} />
+                      清除下一堂
+                    </button>
+                  </>
+                )}
+              </div>
+            </div>
           </div>
 
           {/* Message Section */}

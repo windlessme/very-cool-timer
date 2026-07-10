@@ -11,7 +11,7 @@ interface Message {
   updatedAt: string;
 }
 
-type TimerStatus = 'active' | 'break' | 'extended' | 'paused';
+type TimerStatus = 'active' | 'break' | 'extended' | 'paused' | 'scheduled';
 
 interface Timer {
   id: number;
