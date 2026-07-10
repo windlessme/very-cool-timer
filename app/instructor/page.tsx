@@ -122,9 +122,8 @@ export default function InstructorTimerPage() {
           <h1 className="text-7xl font-bold text-white">尚未開始</h1>
         </section>
         {latestMessage && (
-          <section className="mt-12 rounded-lg border border-gray-700 bg-gray-900 px-8 py-5">
-            <p className="text-xl font-semibold text-gray-400 mb-2">最新訊息</p>
-            <p className="text-3xl font-bold text-white whitespace-pre-wrap">{latestMessage.content}</p>
+          <section className="mt-12 rounded-lg border border-gray-700 bg-gray-900 px-10 py-7">
+            <p className="text-5xl font-bold text-white whitespace-pre-wrap leading-tight">{latestMessage.content}</p>
           </section>
         )}
       </main>
@@ -167,11 +166,8 @@ export default function InstructorTimerPage() {
       </section>
 
       {latestMessage && (
-        <section className={`rounded-lg border px-8 py-5 ${isTenMinuteWarning ? 'border-amber-300 bg-white/80' : 'border-gray-700 bg-gray-900'}`}>
-          <p className={`${isTenMinuteWarning ? 'text-amber-800' : 'text-gray-400'} text-xl font-semibold mb-2`}>
-            最新訊息
-          </p>
-          <p className={`text-3xl font-bold whitespace-pre-wrap ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'}`}>
+        <section className={`rounded-lg border px-10 py-7 ${isTenMinuteWarning ? 'border-amber-300 bg-white/80' : 'border-gray-700 bg-gray-900'}`}>
+          <p className={`text-5xl font-bold whitespace-pre-wrap leading-tight ${isTenMinuteWarning ? 'text-gray-950' : 'text-white'}`}>
             {latestMessage.content}
           </p>
         </section>
