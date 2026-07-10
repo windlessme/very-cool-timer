@@ -1,15 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { createTimer, deleteTimer, listTimers, updateTimer } from '../data';
 
 export async function GET() {
   try {
-    const timers = await prisma.timer.findMany({
-      orderBy: {
-        createdAt: 'desc',
-      },
-    });
+    const timers = await listTimers();
     return NextResponse.json(timers);
   } catch (error) {
     console.error('Error fetching timers:', error);
@@ -21,25 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     const { title, startTime, endTime, isActive, status = 'active' } = await request.json();
     
-    const [, timer] = await prisma.$transaction([
-      prisma.timer.updateMany({
-        where: {
-          isActive: true,
-        },
-        data: {
-          isActive: false,
-        },
-      }),
-      prisma.timer.create({
-        data: {
-          title,
-          startTime,
-          endTime,
-          isActive,
-          status,
-        },
-      }),
-    ]);
+    const timer = await createTimer({ title, startTime, endTime, isActive, status });
     
     return NextResponse.json(timer);
   } catch (error) {
@@ -52,44 +28,7 @@ export async function PUT(request: NextRequest) {
   try {
     const { id, title, startTime, endTime, isActive, status = isActive ? 'active' : 'paused' } = await request.json();
 
-    if (isActive) {
-      const [, timer] = await prisma.$transaction([
-        prisma.timer.updateMany({
-          where: {
-            id: {
-              not: id,
-            },
-            isActive: true,
-          },
-          data: {
-            isActive: false,
-          },
-        }),
-        prisma.timer.update({
-          where: { id },
-          data: {
-            title,
-            startTime,
-            endTime,
-            isActive,
-            status,
-          },
-        }),
-      ]);
-
-      return NextResponse.json(timer);
-    }
-
-    const timer = await prisma.timer.update({
-      where: { id },
-      data: {
-        title,
-        startTime,
-        endTime,
-        isActive,
-        status,
-      },
-    });
+    const timer = await updateTimer({ id, title, startTime, endTime, isActive, status });
     
     return NextResponse.json(timer);
   } catch (error) {
@@ -102,9 +41,7 @@ export async function DELETE(request: NextRequest) {
   try {
     const { id } = await request.json();
     
-    await prisma.timer.delete({
-      where: { id },
-    });
+    await deleteTimer(id);
     
     return NextResponse.json({ success: true });
   } catch (error) {

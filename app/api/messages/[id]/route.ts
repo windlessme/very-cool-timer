@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server';
-import { PrismaClient } from '@prisma/client';
-
-const prisma = new PrismaClient();
+import { deleteMessage, updateMessage } from '../../data';
 
 export async function DELETE(
   request: NextRequest,
@@ -11,9 +9,7 @@ export async function DELETE(
     const { id: idParam } = await params;
     const id = parseInt(idParam);
     
-    await prisma.message.delete({
-      where: { id },
-    });
+    await deleteMessage(id);
     
     return NextResponse.json({ success: true });
   } catch (error) {
@@ -31,13 +27,7 @@ export async function PUT(
     const id = parseInt(idParam);
     const { content, isVisible } = await request.json();
     
-    const message = await prisma.message.update({
-      where: { id },
-      data: {
-        content,
-        isVisible,
-      },
-    });
+    const message = await updateMessage(id, { content, isVisible });
     
     return NextResponse.json(message);
   } catch (error) {

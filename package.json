@@ -4,7 +4,12 @@
   "private": true,
   "scripts": {
     "dev": "next dev",
-    "build": "prisma db push && prisma generate && next build",
+    "build": "prisma generate && next build",
+    "build:cloudflare": "opennextjs-cloudflare build",
+    "preview:cloudflare": "wrangler dev",
+    "deploy:cloudflare": "opennextjs-cloudflare build && opennextjs-cloudflare deploy",
+    "db:migrate:local": "wrangler d1 migrations apply very-cool-timer --local",
+    "db:migrate:remote": "wrangler d1 migrations apply very-cool-timer --remote",
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate"
@@ -12,20 +17,22 @@
   "dependencies": {
     "@prisma/client": "^6.11.1",
     "lucide-react": "^0.525.0",
-    "next": "15.3.5",
+    "next": "^15.5.18",
     "prisma": "^6.11.1",
     "react": "^19.0.0",
     "react-dom": "^19.0.0"
   },
   "devDependencies": {
     "@eslint/eslintrc": "^3",
+    "@opennextjs/cloudflare": "^1.20.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
-    "eslint-config-next": "15.3.5",
+    "eslint-config-next": "^15.5.18",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5",
+    "wrangler": "^4.110.0"
   }
 }

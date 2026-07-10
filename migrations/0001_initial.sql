@@ -1,0 +1,21 @@
+CREATE TABLE IF NOT EXISTS "Timer" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "title" TEXT NOT NULL,
+  "startTime" TEXT NOT NULL,
+  "endTime" TEXT NOT NULL,
+  "isActive" INTEGER NOT NULL DEFAULT 0,
+  "status" TEXT NOT NULL DEFAULT 'active',
+  "createdAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE TABLE IF NOT EXISTS "Message" (
+  "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+  "content" TEXT NOT NULL,
+  "isVisible" INTEGER NOT NULL DEFAULT 1,
+  "createdAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+);
+
+CREATE INDEX IF NOT EXISTS "Timer_isActive_createdAt_idx" ON "Timer" ("isActive", "createdAt");
+CREATE INDEX IF NOT EXISTS "Message_isVisible_createdAt_idx" ON "Message" ("isVisible", "createdAt");
